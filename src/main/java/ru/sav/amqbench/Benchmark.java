@@ -23,6 +23,8 @@ public class Benchmark implements CommandLineRunner {
         List<Thread> pool = new ArrayList<>();
         ActiveMQQueue activeMQQueue = new ActiveMQQueue(benchmarkSettings.getQueue());
 
+        Counter c = new Counter(benchmarkSettings.getN());
+
         log.info("START SEND");
         for (int i = 0; i < benchmarkSettings.getC(); i ++) {
             Thread t = new Thread(() -> {
@@ -30,7 +32,10 @@ public class Benchmark implements CommandLineRunner {
                 jmsQueueSender.setQueue(activeMQQueue);
                 jmsQueueSender.setConnectionFactory(connectionFactory);
 
-                for (int i1 = 0; i1 < benchmarkSettings.getN(); i1++) {
+//                for (int i1 = 0; i1 < benchmarkSettings.getN(); i1++) {
+//                    jmsQueueSender.send(benchmarkSettings.getMessage());
+//                }
+                while (c.next()) {
                     jmsQueueSender.send(benchmarkSettings.getMessage());
                 }
             });
@@ -49,6 +54,7 @@ public class Benchmark implements CommandLineRunner {
         }
 
         pool.clear();
+        c.flush();
 
         log.info("START RECEIVE");
         for (int i = 0; i < benchmarkSettings.getC(); i ++) {
@@ -89,5 +95,35 @@ public class Benchmark implements CommandLineRunner {
     @Autowired
     public void setConnectionFactory(PooledConnectionFactory connectionFactory) {
         this.connectionFactory = connectionFactory;
+    }
+
+    private class Counter {
+        private long i = 0;
+        private long n = 0;
+
+        Counter(long n) {
+            this.n = n;
+        }
+
+        public synchronized boolean done() {
+            return i >= n;
+        }
+
+        public synchronized boolean next() {
+            if (i >= n) {
+                return false;
+            } else {
+                i++;
+                return true;
+            }
+        }
+
+        public void setN(long n) {
+            this.n = n;
+        }
+
+        public void flush() {
+            i = 0;
+        }
     }
 }
