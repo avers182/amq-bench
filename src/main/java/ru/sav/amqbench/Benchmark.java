@@ -14,10 +14,12 @@ import java.util.List;
 
 @Component
 public class Benchmark implements CommandLineRunner {
+    private final static Logger log = LoggerFactory.getLogger(Benchmark.class);
+
     private BenchmarkSettings benchmarkSettings;
     private PooledConnectionFactory connectionFactory;
 
-    private final static Logger log = LoggerFactory.getLogger(Benchmark.class);
+    private final Object lock = new Object();
 
     public void run(String[] args) {
         List<Thread> pool = new ArrayList<>();
@@ -35,9 +37,17 @@ public class Benchmark implements CommandLineRunner {
 //                for (int i1 = 0; i1 < benchmarkSettings.getN(); i1++) {
 //                    jmsQueueSender.send(benchmarkSettings.getMessage());
 //                }
+
                 while (c.next()) {
                     jmsQueueSender.send(benchmarkSettings.getMessage());
+                    log.info(Thread.currentThread().getName() + " sent message: " + benchmarkSettings.getMessage());
                 }
+
+                log.debug(Thread.currentThread().getName() + " finished");
+                synchronized (lock) {
+                    lock.notify();
+                }
+                log.debug(Thread.currentThread().getName() + " notified");
             });
             pool.add(t);
             t.start();
@@ -49,6 +59,18 @@ public class Benchmark implements CommandLineRunner {
             for (Thread t: pool) {
                 if (t.isAlive()) {
                     alive = true;
+                    break;
+                }
+            }
+
+            if (alive) {
+                synchronized (lock) {
+                    try {
+                        lock.wait(5000);
+                    } catch (InterruptedException e) {
+                        log.debug("<<< INTERRUPTED >>>");
+                    }
+                    log.debug("lock released");
                 }
             }
         }
@@ -65,8 +87,14 @@ public class Benchmark implements CommandLineRunner {
                 String text = null;
                 do {
                     text = jmsQueueReceiver.receive();
-                    log.info(text);
+                    log.info(Thread.currentThread().getName() + " received: " + text);
                 } while (text != null);
+
+                log.debug(Thread.currentThread().getName() + " finished");
+                synchronized (lock) {
+                    lock.notify();
+                }
+                log.debug(Thread.currentThread().getName() + " notified");
             });
             pool.add(t);
             t.start();
@@ -78,6 +106,17 @@ public class Benchmark implements CommandLineRunner {
             for (Thread t: pool) {
                 if (t.isAlive()) {
                     alive = true;
+                }
+            }
+
+            if (alive) {
+                synchronized (lock) {
+                    try {
+                        lock.wait(5000);
+                    } catch (InterruptedException e) {
+                        log.debug("<<< INTERRUPTED >>>");
+                    }
+                    log.debug("lock released");
                 }
             }
         }
