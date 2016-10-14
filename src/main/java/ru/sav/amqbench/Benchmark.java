@@ -106,6 +106,7 @@ public class Benchmark implements CommandLineRunner {
             for (Thread t: pool) {
                 if (t.isAlive()) {
                     alive = true;
+                    break;
                 }
             }
 
